@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudStorage - Drive Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen flex">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-white border-r border-gray-200 flex flex-col justify-between hidden md:flex">
+    <div>
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+        <div class="bg-indigo-600 text-white p-2 rounded-xl shadow-md">
+          <i class="fa-solid fa-cloud text-lg"></i>
+        </div>
+        <span class="text-xl font-bold text-gray-900 tracking-tight">CloudStorage</span>
+      </div>
+
+      <!-- New Upload Button -->
+      <div class="p-4">
+        <label for="fileInput" class="flex items-center gap-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-3 rounded-2xl shadow-sm hover:shadow transition cursor-pointer">
+          <i class="fa-solid fa-plus text-sm"></i>
+          <span>New Upload</span>
+        </label>
+        <input type="file" id="fileInput" class="hidden" onchange="uploadFile(this)">
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="px-3 space-y-1">
+        <a href="#" class="flex items-center gap-3 px-4 py-3 bg-indigo-50 text-indigo-600 font-medium rounded-xl">
+          <i class="fa-solid fa-hard-drive"></i>
+          <span>My Drive</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 font-medium rounded-xl transition">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span>Recent</span>
+        </a>
+      </nav>
+    </div>
+
+    <!-- Storage Widget at Bottom of Sidebar -->
+    <div class="p-4 m-4 bg-gray-50 border border-gray-100 rounded-2xl">
+      <div class="flex justify-between items-center text-xs font-semibold text-gray-600 mb-2">
+        <span>Storage</span>
+        <span id="storageText">0 MB / 5 GB</span>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden mb-2">
+        <div id="storageBar" class="bg-indigo-600 h-full transition-all duration-500" style="width: 0%"></div>
+      </div>
+      <p id="storageRemaining" class="text-[11px] text-gray-500">5.00 GB left</p>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 flex flex-col min-w-0">
+    
+    <!-- Top Bar -->
+    <header class="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between gap-4">
+      <div class="flex-1 max-w-2xl relative">
+        <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400 text-sm"></i>
+        <input type="text" id="searchInput" placeholder="Search files in CloudStorage..." 
+               class="w-full bg-gray-100 border-none rounded-full pl-11 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition">
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-sm font-medium text-gray-700">Admin User</span>
+        <div class="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">
+          A
+        </div>
+      </div>
+    </header>
+
+    <!-- Content Section -->
+    <div class="p-8 flex-1 overflow-y-auto">
+      
+      <!-- Filter Chips -->
+      <div class="flex items-center gap-2 mb-6">
+        <span class="text-xs font-bold text-gray-400 uppercase tracking-wider mr-2">Type:</span>
+        <button onclick="filterFiles('all')" class="filter-btn px-4 py-1.5 rounded-full text-xs font-semibold bg-indigo-600 text-white transition shadow-sm">All Files</button>
+        <button onclick="filterFiles('image')" class="filter-btn px-4 py-1.5 rounded-full text-xs font-semibold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition">Image</button>
+        <button onclick="filterFiles('pdf')" class="filter-btn px-4 py-1.5 rounded-full text-xs font-semibold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition">PDF / Doc</button>
+      </div>
+
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Files</h2>
+
+      <!-- Files Grid -->
+      <div id="filesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <!-- Dynamic Cards -->
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const MAX_STORAGE_BYTES = 5 * 1024 * 1024 * 1024;
+    let allFiles = [];
+    let currentFilter = 'all';
+
+    async function loadFiles() {
+      try {
+        const res = await fetch('/api/files');
+        const data = await res.json();
+        allFiles = data.files || [];
+        updateStorageBar(data.totalUsedBytes || 0);
+        renderFiles(allFiles);
+      } catch (err) {
+        console.error('Failed to load files:', err);
+      }
+    }
+
+    function renderFiles(files) {
+      const grid = document.getElementById('filesGrid');
+      
+      if (files.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full py-16 text-center text-gray-400 bg-white border border-dashed border-gray-200 rounded-2xl">
+            <i class="fa-solid fa-cloud-arrow-up text-4xl mb-3 text-gray-300"></i>
+            <p class="text-sm font-medium">No files uploaded yet. Click "New Upload" above!</p>
+          </div>`;
+        return;
+      }
+
+      grid.innerHTML = files.map(file => {
+        const isImage = file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+        const isPdf = file.name.match(/\.(pdf)$/i);
+        
+        let iconHtml = '';
+        if (isImage) {
+          iconHtml = `<img src="${file.url}" class="w-full h-36 object-cover rounded-t-xl">`;
+        } else if (isPdf) {
+          iconHtml = `<div class="w-full h-36 bg-red-50 flex items-center justify-center rounded-t-xl text-red-500"><i class="fa-solid fa-file-pdf text-4xl"></i></div>`;
+        } else {
+          iconHtml = `<div class="w-full h-36 bg-indigo-50 flex items-center justify-center rounded-t-xl text-indigo-500"><i class="fa-solid fa-file-lines text-4xl"></i></div>`;
+        }
+
+        return `
+          <div class="bg-white border border-gray-200/80 rounded-2xl shadow-sm hover:shadow-md transition flex flex-col group overflow-hidden">
+            ${iconHtml}
+            <div class="p-4 flex-1 flex flex-col justify-between">
+              <div>
+                <h3 class="font-semibold text-gray-900 text-sm truncate mb-1" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</h3>
+                <p class="text-xs text-gray-400">${new Date(file.uploaded_at).toLocaleDateString()}</p>
+              </div>
+              <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                <span class="text-xs font-semibold text-indigo-600">${file.size_display}</span>
+                <div class="flex items-center gap-2">
+                  <a href="${file.url}" target="_blank" download class="text-gray-400 hover:text-indigo-600 p-1.5 transition" title="Download">
+                    <i class="fa-solid fa-download text-xs"></i>
+                  </a>
+                  <button onclick="deleteFile(${file.id})" class="text-gray-400 hover:text-red-500 p-1.5 transition" title="Delete">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function uploadFile(input) {
+      if (input.files.length === 0) return;
+
+      const formData = new FormData();
+      formData.append('file', input.files[0]);
+
+      const uploadBtnLabel = document.querySelector('aside label');
+      uploadBtnLabel.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading...`;
+
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        input.value = '';
+        loadFiles();
+      } catch (err) {
+        alert('Upload failed: ' + err.message);
+      } finally {
+        uploadBtnLabel.innerHTML = `<i class="fa-solid fa-plus text-sm"></i> New Upload`;
+      }
+    }
+
+    async function deleteFile(id) {
+      if (confirm('Are you sure you want to delete this file?')) {
+        await fetch(`/api/files/${id}`, { method: 'DELETE' });
+        loadFiles();
+      }
+    }
+
+    function updateStorageBar(usedBytes) {
+      const percentage = Math.min((usedBytes / MAX_STORAGE_BYTES) * 100, 100).toFixed(2);
+      const remainingBytes = Math.max(MAX_STORAGE_BYTES - usedBytes, 0);
+
+      document.getElementById('storageBar').style.width = percentage + '%';
+      document.getElementById('storageText').innerText = `${formatBytes(usedBytes)} / 5 GB`;
+      document.getElementById('storageRemaining').innerText = `${formatBytes(remainingBytes)} left`;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function filterFiles(type) {
+      currentFilter = type;
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white');
+        btn.classList.add('bg-white', 'text-gray-600', 'border', 'border-gray-200');
+      });
+      event.target.classList.remove('bg-white', 'text-gray-600', 'border', 'border-gray-200');
+      event.target.classList.add('bg-indigo-600', 'text-white');
+
+      if (type === 'image') {
+        renderFiles(allFiles.filter(f => f.name.match(/\.(jpg|jpeg|png|gif|webp)$/i)));
+      } else if (type === 'pdf') {
+        renderFiles(allFiles.filter(f => f.name.match(/\.(pdf|doc|docx|txt)$/i)));
+      } else {
+        renderFiles(allFiles);
+      }
+    }
+
+    // Search functionality
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      const filtered = allFiles.filter(f => f.name.toLowerCase().includes(query));
+      renderFiles(filtered);
+    });
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    loadFiles();
+  </script>
+</body>
+</html>
